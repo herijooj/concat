@@ -28,11 +28,11 @@ show_help() {
     echo -e "${GREEN}  -d${NC}             Describe files before concatenation (customizable)"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
-    echo -e "  ${GREEN}$0${NC} output.txt                       # Concatenate all files"
-    echo -e "  ${GREEN}$0${NC} ${YELLOW}-e \"*.c\"${NC} output.txt      # Concatenate all .c files (quoted!)"
-    echo -e "  ${GREEN}$0${NC} ${YELLOW}-e \"*.c\" -e \"*.h\"${NC} output.txt  # Concatenate all .c and .h files"
-    echo -e "  ${GREEN}$0${NC} ${YELLOW}-i${NC} output.txt               # Interactive mode"
-    echo -e "  ${GREEN}$0${NC} ${YELLOW}-d -e \"*.py\"${NC} output.txt    # Concatenate all .py files with descriptions"
+    echo -e "  ${GREEN}/src/${NC} output.txt                   # Concatenate all files"
+    echo -e "  ${GREEN}/src/${NC} ${YELLOW}-e \"*.c\"${NC} output.txt          # Concatenate all .c files (quoted!)"
+    echo -e "  ${GREEN}/src/${NC} ${YELLOW}-e \"*.c\" -e \"*.h\"${NC} output.txt # Concatenate all .c and .h files"
+    echo -e "  ${GREEN}/src/${NC} ${YELLOW}-i${NC} output.txt                # Interactive mode"
+    echo -e "  ${GREEN}/src/${NC} ${YELLOW}-d -e \"*.py\"${NC} output.txt      # Concatenate all .py files with descriptions"
 }
 
 # Default variables
