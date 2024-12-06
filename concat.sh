@@ -1,56 +1,57 @@
 #!/usr/bin/env bash
 
+# Disable filename expansion by the shell so that *.sh is not expanded.
+set -f
+
 function set_colors() {
-    RED='\033[1;31m'        # Vermelho brilhante
-    GREEN='\033[1;32m'      # Verde brilhante
-    YELLOW='\033[1;93m'     # Amarelo claro
-    BLUE='\033[1;36m'       # Azul claro ciano
-    NC='\033[0m'            # Sem cor (reset)
+    RED='\033[1;31m'    # Bright Red
+    GREEN='\033[1;32m'  # Bright Green
+    YELLOW='\033[1;93m' # Light Yellow
+    BLUE='\033[1;36m'   # Light Cyan
+    MAGENTA='\033[1;35m' # Magenta
+    NC='\033[0m'        # No Color (reset)
 }
 
-# Configuração de cores para terminal
+# Use colors if output is a terminal and no --no-color arg is passed
 if [ -t 1 ] && ! grep -q -e '--no-color' <<<"$@"; then
     set_colors
 fi
 
+# Default output file
+default_output="concat.o"
+
 # Function to display help
 show_help() {
-    echo -e "${BLUE}Usage:${NC} $0 ${YELLOW}[options]${NC} ${GREEN}[output_file]${NC}"
+    echo -e "${BLUE}Usage:${NC} $0 [options] [pattern ...] [output_file]"
     echo ""
-    echo -e "${BLUE}Concatenate files into a single output file with flexible selection.${NC}"
-    echo -e "${BLUE}Default output file:${NC} concat.o"
+    echo -e "${BLUE}Description:${NC}"
+    echo -e "  Concatenate files into a single output file."
+    echo -e "  If no output file is specified, defaults to '${GREEN}${default_output}${NC}'."
+    echo -e "  All arguments before the last one are treated as file patterns."
     echo ""
     echo -e "${YELLOW}Options:${NC}"
-    echo -e "${GREEN}  -h${NC}             Show this help message and exit"
-    echo -e "${GREEN}  -e${NC} ${YELLOW}pattern${NC}     Add a file pattern to match. ${RED}IMPORTANT: Quote the pattern!${NC}"
-    echo -e "                 For example: ${YELLOW}-e \"*.c\"${NC} or ${YELLOW}-e \"*.sh\"${NC}"
-    echo -e "${GREEN}  -i${NC}             Interactive mode: prompts you to choose patterns or 'all'"
-    echo -e "${GREEN}  -d${NC}             Describe files before concatenation (customizable)"
+    echo -e "  ${GREEN}-h${NC}             Show this help message and exit"
+    echo -e "  ${GREEN}-i${NC}             Interactive mode: prompts per file to include or skip"
+    echo -e "  ${GREEN}-d${NC}             Describe files before concatenation (optional)"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
-    echo -e "  ${GREEN}/src/${NC} output.txt                   # Concatenate all files"
-    echo -e "  ${GREEN}/src/${NC} ${YELLOW}-e \"*.c\"${NC} output.txt          # Concatenate all .c files (quoted!)"
-    echo -e "  ${GREEN}/src/${NC} ${YELLOW}-e \"*.c\" -e \"*.h\"${NC} output.txt # Concatenate all .c and .h files"
-    echo -e "  ${GREEN}/src/${NC} ${YELLOW}-i${NC} output.txt                # Interactive mode"
-    echo -e "  ${GREEN}/src/${NC} ${YELLOW}-d -e \"*.py\"${NC} output.txt      # Concatenate all .py files with descriptions"
+    echo -e "  ${GREEN}concat *.c *.h out.txt${NC}    # Concatenate all .c and .h files into out.txt"
+    echo -e "  ${GREEN}concat *.py${NC}               # Concatenate all .py files into the default output file"
+    echo -e "  ${GREEN}concat -d *.sh script.out${NC} # Concatenate all .sh files with descriptions into script.out"
+    echo -e "  ${GREEN}concat -i${NC}                 # Interactive mode to choose files from all matches"
 }
 
 # Default variables
-declare -a patterns=()
+patterns=()
 interactive_mode=false
 describe_mode=false
-default_output="concat.o"
 
-# Parse options
-while getopts "he:id" opt; do
+# Parse known options first
+while getopts "hid" opt; do
     case $opt in
         h)
             show_help
             exit 0
-            ;;
-        e)
-            # Add pattern exactly as provided. The user should quote patterns
-            patterns+=("$OPTARG")
             ;;
         i)
             interactive_mode=true
@@ -67,17 +68,29 @@ done
 
 shift $((OPTIND-1))
 
-# Check if output file name is provided, otherwise use default
-if [[ -z "$1" ]]; then
+arg_count=$#
+if [ $arg_count -eq 0 ]; then
+    # No patterns, no output specified
     output_file="$default_output"
-    echo -e "${YELLOW}No output file specified. Using default: $output_file${NC}"
-else
+    patterns=() # means all files
+    echo -e "${YELLOW}No patterns and no output file specified. Using all files -> $output_file${NC}"
+elif [ $arg_count -eq 1 ]; then
+    # Only one argument: treat as output file
     output_file="$1"
+    patterns=() # means all files
+    echo -e "${YELLOW}No patterns specified, using all files. Output: $output_file${NC}"
+else
+    # Multiple arguments: last one is output file, the rest are patterns
+    output_file="${!arg_count}"
+    arg_limit=$((arg_count - 1))
+    for (( i=1; i<=arg_limit; i++ )); do
+        patterns+=("${!i}")
+    done
 fi
 
 output_file_abs=$(readlink -f "$output_file")
 
-# Interactive mode: prompt user if no patterns are provided
+# If interactive mode and no patterns given, prompt for pattern or 'all'
 if $interactive_mode && [ ${#patterns[@]} -eq 0 ]; then
     echo -e "${GREEN}Interactive mode enabled.${NC}"
     echo "Enter a file pattern (e.g., '*.c'), or type 'all' to select all files:"
@@ -91,13 +104,12 @@ fi
 
 # Determine file list
 if [ ${#patterns[@]} -eq 0 ]; then
-    # No patterns: use all files
+    # No patterns given: use all files
     file_list=$(find . -type f)
 else
     # Use provided patterns
     file_list=""
     for p in "${patterns[@]}"; do
-        # Using the pattern as a literal string to find files
         matches=$(find . -type f -name "$p")
         file_list="$file_list"$'\n'"$matches"
     done
@@ -105,12 +117,28 @@ else
     file_list=$(echo "$file_list" | sed '/^\s*$/d')
 fi
 
+# If interactive mode is on, ask user for each file
+selected_files=()
+if $interactive_mode; then
+    echo -e "${YELLOW}You will be prompted for each file to include (y/n).${NC}"
+    IFS=$'\n'
+    for file in $file_list; do
+        [ -z "$file" ] && continue
+        echo -en "${BLUE}Include ${file}? [y/n]: ${NC}"
+        read -r answer
+        if [[ $answer == [Yy] ]]; then
+            selected_files+=("$file")
+        fi
+    done
+    file_list=$(printf "%s\n" "${selected_files[@]}")
+    IFS="$OLDIFS"
+fi
+
 # Clear output file
 > "$output_file"
 
-echo -e "${GREEN}Concatenating files into $output_file...${NC}"
+echo -e "${GREEN}Concatenating files into ${output_file}...${NC}"
 
-# Iterate through files
 echo "$file_list" | while read -r file; do
     [ -z "$file" ] && continue
     full_path=$(readlink -f "$file")
@@ -124,7 +152,7 @@ echo "$file_list" | while read -r file; do
     echo "--- START: $file ---" >> "$output_file"
 
     if $describe_mode; then
-        # Add a description of the file before its contents, if desired
+        # Add a description of the file before its contents
         file_size=$(wc -c < "$file")
         echo "Description: $file (size: $file_size bytes)" >> "$output_file"
     fi
@@ -133,8 +161,5 @@ echo "$file_list" | while read -r file; do
     echo "" >> "$output_file"
 done
 
-# Add end path for the last file
 echo "--- END PATH: $output_file_abs ---" >> "$output_file"
-
 echo -e "${GREEN}Done.${NC}"
-
