@@ -1,4 +1,5 @@
 # ConCaT
+![terminal](concat.png)
 
 **Concatenate and filter files easily, with the path for the file in the middle.**
 
